@@ -2,6 +2,12 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import plotly.io as pio
+
+pio.renderers.default = "browser" 
+
+matplotlib_mode = True # sets wether matplotlib or plotly express (in browser window) are used
 
 TRACKING_FILE = "Tracking_data_efficiecny.csv"
 CURVE_PT_FILE = Path("curves") / "eta_powertrain_vs_speed.csv"
@@ -91,28 +97,98 @@ print(f"Pred energy using dataset force (kWh): {E_data:.3f}   error % = {err_dat
 print(f"Pred energy using param model (kWh):   {E_par:.3f}   error % = {err_par:.2f}")
 print("======================================================\n")
 
-# ---------- plots ----------
-plt.figure()
-plt.plot(df["E_meas_kWh_cum"], label="Measured E (kWh)")
-plt.plot(df["E_pred_data_kWh_cum"], label="Pred E using dataset force (kWh)")
-plt.plot(df["E_pred_param_kWh_cum"], label="Pred E using param force (kWh)")
-plt.title("Cumulative energy comparison")
-plt.xlabel("Sample index")
-plt.ylabel("Energy (kWh)")
-plt.legend()
-plt.tight_layout()
-plt.savefig(OUTDIR / "energy_cum_meas_vs_pred_v2.png", dpi=200)
-plt.show()
+if matplotlib_mode:
+    # ---------- plots ----------
+    plt.figure()
+    plt.plot(df["E_meas_kWh_cum"], label="Measured E (kWh)")
+    plt.plot(df["E_pred_data_kWh_cum"], label="Pred E using dataset force (kWh)")
+    plt.plot(df["E_pred_param_kWh_cum"], label="Pred E using param force (kWh)")
+    plt.title("Cumulative energy comparison")
+    plt.xlabel("Sample index")
+    plt.ylabel("Energy (kWh)")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(OUTDIR / "energy_cum_meas_vs_pred_v2.png", dpi=200)
+    plt.show()
 
-# Compare mech power estimates
-step = max(1, len(df)//8000)
-plt.figure()
-plt.plot(df["P_mech_data_kW"].to_numpy()[::step], label="P_mech from dataset force (kW)")
-plt.plot(df["P_mech_param_kW"].to_numpy()[::step], label="P_mech from param model (kW)")
-plt.title("Mechanical power: dataset vs param model (downsampled)")
-plt.xlabel("Sample index (downsampled)")
-plt.ylabel("Power (kW)")
-plt.legend()
-plt.tight_layout()
-plt.savefig(OUTDIR / "mech_power_dataset_vs_param.png", dpi=200)
-plt.show()
+    # Compare mech power estimates
+    step = max(1, len(df)//8000)
+    plt.figure()
+    plt.plot(df["P_mech_data_kW"].to_numpy()[::step], label="P_mech from dataset force (kW)")
+    plt.plot(df["P_mech_param_kW"].to_numpy()[::step], label="P_mech from param model (kW)")
+    plt.title("Mechanical power: dataset vs param model (downsampled)")
+    plt.xlabel("Sample index (downsampled)")
+    plt.ylabel("Power (kW)")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(OUTDIR / "mech_power_dataset_vs_param.png", dpi=200)
+    plt.show()
+
+else:
+    # ---------- plots ----------
+    fig1 = go.Figure()
+
+    fig1.add_trace(
+        go.Scatter(
+            y=df["E_meas_kWh_cum"],
+            mode="lines",
+            name="Measured E (kWh)"
+        )
+    )
+
+    fig1.add_trace(
+        go.Scatter(
+            y=df["E_pred_data_kWh_cum"],
+            mode="lines",
+            name="Pred E using dataset force (kWh)"
+        )
+    )
+
+    fig1.add_trace(
+        go.Scatter(
+            y=df["E_pred_param_kWh_cum"],
+            mode="lines",
+            name="Pred E using param force (kWh)"
+        )
+    )
+
+    fig1.update_layout(
+        title="Cumulative energy comparison",
+        xaxis_title="Sample index",
+        yaxis_title="Energy (kWh)",
+        template="plotly_white"
+    )
+
+    fig1.write_image(str(OUTDIR / "energy_cum_meas_vs_pred_v2.png"), scale=2)
+    fig1.show()
+
+    # Compare mech power estimates
+    step = max(1, len(df)//8000)
+
+    fig2 = go.Figure()
+
+    fig2.add_trace(
+        go.Scatter(
+            y=df["P_mech_data_kW"].to_numpy()[::step],
+            mode="lines",
+            name="P_mech from dataset force (kW)"
+        )
+    )
+
+    fig2.add_trace(
+        go.Scatter(
+            y=df["P_mech_param_kW"].to_numpy()[::step],
+            mode="lines",
+            name="P_mech from param model (kW)"
+        )
+    )
+
+    fig2.update_layout(
+        title="Mechanical power: dataset vs param model (downsampled)",
+        xaxis_title="Sample index (downsampled)",
+        yaxis_title="Power (kW)",
+        template="plotly_white"
+    )
+
+    fig2.write_image(str(OUTDIR / "mech_power_dataset_vs_param.png"), scale=2)
+    fig2.show()

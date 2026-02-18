@@ -2,6 +2,14 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
+import plotly.io as pio
+
+pio.renderers.default = "browser"  # avoids nbformat error
+
+matplotlib_mode = True
+
 
 # =========================
 # CONFIG (edit if needed)
@@ -127,29 +135,89 @@ print("====================================================\n")
 # =========================
 # PLOTS
 # =========================
-# 1) Cumulative energy
-plt.figure()
-plt.plot(df["E_meas_kWh_cum"].to_numpy(), label="Measured cumulative energy (kWh)")
-plt.plot(df["E_pred_kWh_cum"].to_numpy(), label="Predicted cumulative energy (kWh)")
-plt.title("Cumulative Energy: Measured vs Predicted")
-plt.xlabel("Sample index")
-plt.ylabel("Energy (kWh)")
-plt.legend()
-plt.tight_layout()
-plt.savefig(OUTDIR / "energy_cum_meas_vs_pred.png", dpi=200)
-plt.show()
+if matplotlib_mode:
+    # 1) Cumulative energy
+    plt.figure()
+    plt.plot(df["E_meas_kWh_cum"].to_numpy(), label="Measured cumulative energy (kWh)")
+    plt.plot(df["E_pred_kWh_cum"].to_numpy(), label="Predicted cumulative energy (kWh)")
+    plt.title("Cumulative Energy: Measured vs Predicted")
+    plt.xlabel("Sample index")
+    plt.ylabel("Energy (kWh)")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(OUTDIR / "energy_cum_meas_vs_pred.png", dpi=200)
+    plt.show()
 
-# 2) Power comparison (downsample for readability)
-step = max(1, len(df)//5000)
-plt.figure()
-plt.plot(df["P_mech_kW"].to_numpy()[::step], label="Mechanical power (kW)")
-plt.plot(df["P_bat_pred_kW"].to_numpy()[::step], label="Predicted battery power (kW)")
-plt.title("Power (downsampled): Mechanical vs Predicted Battery")
-plt.xlabel("Sample index (downsampled)")
-plt.ylabel("Power (kW)")
-plt.legend()
-plt.tight_layout()
-plt.savefig(OUTDIR / "power_mech_vs_pred_bat.png", dpi=200)
-plt.show()
+    # 2) Power comparison (downsample for readability)
+    step = max(1, len(df)//5000)
+    plt.figure()
+    plt.plot(df["P_mech_kW"].to_numpy()[::step], label="Mechanical power (kW)")
+    plt.plot(df["P_bat_pred_kW"].to_numpy()[::step], label="Predicted battery power (kW)")
+    plt.title("Power (downsampled): Mechanical vs Predicted Battery")
+    plt.xlabel("Sample index (downsampled)")
+    plt.ylabel("Power (kW)")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(OUTDIR / "power_mech_vs_pred_bat.png", dpi=200)
+    plt.show()
+else:
+    # 1) Cumulative energy
+    fig1 = go.Figure()
 
-print(f"Saved plots to: {OUTDIR.resolve()}")
+    fig1.add_trace(
+        go.Scatter(
+            y=df["E_meas_kWh_cum"].to_numpy(),
+            mode="lines",
+            name="Measured cumulative energy (kWh)"
+        )
+    )
+
+    fig1.add_trace(
+        go.Scatter(
+            y=df["E_pred_kWh_cum"].to_numpy(),
+            mode="lines",
+            name="Predicted cumulative energy (kWh)"
+        )
+    )
+
+    fig1.update_layout(
+        title="Cumulative Energy: Measured vs Predicted",
+        xaxis_title="Sample index",
+        yaxis_title="Energy (kWh)",
+        template="plotly_white"
+    )
+
+    fig1.write_image(str(OUTDIR / "energy_cum_meas_vs_pred.png"), scale=2)
+    fig1.show()
+
+
+    # 2) Power comparison (downsample for readability)
+    step = max(1, len(df)//5000)
+
+    fig2 = go.Figure()
+
+    fig2.add_trace(
+        go.Scatter(
+            y=df["P_mech_kW"].to_numpy()[::step],
+            mode="lines",
+            name="Mechanical power (kW)"
+        )
+    )
+
+    fig2.add_trace(
+        go.Scatter(
+            y=df["P_bat_pred_kW"].to_numpy()[::step],
+            mode="lines",
+            name="Predicted battery power (kW)"
+        )
+    )
+
+    fig2.update_layout(
+        title="Power (downsampled): Mechanical vs Predicted Battery",
+        xaxis_title="Sample index (downsampled)",
+        yaxis_title="Power (kW)",
+        template="plotly_white"
+    )
+
+    fig2.write_image(str(OUTDIR / "power_mech_vs_pred_bat.png"), scale=2)
+    fig2.show()

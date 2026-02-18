@@ -1,6 +1,13 @@
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
+import plotly.io as pio
+pio.renderers.default = "browser"
+
+matplotlib_mode = True
 
 # =========================
 # CONFIG
@@ -123,12 +130,49 @@ print("Saved:", out)
 # =========================
 # QUICK PLOT
 # =========================
-import matplotlib.pyplot as plt
+if matplotlib_mode:
+    plt.figure()
+    plt.plot(curve["T_bat_C"], curve["eta_battery_mean"])
+    plt.fill_between(curve["T_bat_C"], curve["eta_battery_p05"], curve["eta_battery_p95"], alpha=0.2)
+    plt.xlabel("Battery temperature (°C)")
+    plt.ylabel("Battery efficiency (proxy)")
+    plt.title("η_battery(T_bat) calibration curve")
+    plt.show()
 
-plt.figure()
-plt.plot(curve["T_bat_C"], curve["eta_battery_mean"])
-plt.fill_between(curve["T_bat_C"], curve["eta_battery_p05"], curve["eta_battery_p95"], alpha=0.2)
-plt.xlabel("Battery temperature (°C)")
-plt.ylabel("Battery efficiency (proxy)")
-plt.title("η_battery(T_bat) calibration curve")
-plt.show()
+else:
+    # Base line (mean curve)
+    fig = px.line(
+        curve,
+        x="T_bat_C",
+        y="eta_battery_mean",
+        labels={
+            "T_bat_C": "Battery temperature (°C)",
+            "eta_battery_mean": "Battery efficiency (proxy)"
+        },
+        title="η_battery(T_bat) calibration curve"
+    )
+
+    # Add shaded confidence band (p05–p95)
+    fig.add_trace(
+        go.Scatter(
+            x=curve["T_bat_C"],
+            y=curve["eta_battery_p95"],
+            mode="lines",
+            line=dict(width=0),
+            showlegend=False
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=curve["T_bat_C"],
+            y=curve["eta_battery_p05"],
+            mode="lines",
+            fill="tonexty",
+            fillcolor="rgba(0, 0, 255, 0.2)",
+            line=dict(width=0),
+            name="p05–p95 range"
+        )
+    )
+
+    fig.show()

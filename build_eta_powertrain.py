@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
+matplotlib_mode = True
+
 # ==========================================================
 # CONFIGURATION
 # ==========================================================
@@ -112,16 +114,67 @@ eta_curve.to_csv(output_file, index=False)
 print(f"Saved: {output_file}")
 
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import plotly.io as pio
 
-plt.figure()
-plt.plot(eta_curve["speed_kph"], eta_curve["eta_powertrain_mean"])
-plt.fill_between(
-    eta_curve["speed_kph"],
-    eta_curve["eta_powertrain_p05"],
-    eta_curve["eta_powertrain_p95"],
-    alpha=0.2
-)
-plt.xlabel("Speed (km/h)")
-plt.ylabel("Powertrain efficiency")
-plt.title("η_powertrain(v) calibration curve")
-plt.show()
+pio.renderers.default = "browser"
+
+if matplotlib_mode:
+    plt.figure()
+    plt.plot(eta_curve["speed_kph"], eta_curve["eta_powertrain_mean"])
+    plt.fill_between(
+        eta_curve["speed_kph"],
+        eta_curve["eta_powertrain_p05"],
+        eta_curve["eta_powertrain_p95"],
+        alpha=0.2
+    )
+    plt.xlabel("Speed (km/h)")
+    plt.ylabel("Powertrain efficiency")
+    plt.title("η_powertrain(v) calibration curve")
+    plt.show()
+else:
+    fig = go.Figure()
+
+    # Upper bound (p95) — invisible line
+    fig.add_trace(
+        go.Scatter(
+            x=eta_curve["speed_kph"],
+            y=eta_curve["eta_powertrain_p95"],
+            mode="lines",
+            line=dict(width=0),
+            showlegend=False
+        )
+    )
+
+    # Lower bound (p05) — filled to previous trace
+    fig.add_trace(
+        go.Scatter(
+            x=eta_curve["speed_kph"],
+            y=eta_curve["eta_powertrain_p05"],
+            mode="lines",
+            fill="tonexty",
+            fillcolor="rgba(0, 0, 255, 0.2)",
+            line=dict(width=0),
+            name="p05–p95 range"
+        )
+    )
+
+    # Mean curve
+    fig.add_trace(
+        go.Scatter(
+            x=eta_curve["speed_kph"],
+            y=eta_curve["eta_powertrain_mean"],
+            mode="lines",
+            name="Mean efficiency"
+        )
+    )
+
+    fig.update_layout(
+        title="η_powertrain(v) calibration curve",
+        xaxis_title="Speed (km/h)",
+        yaxis_title="Powertrain efficiency",
+        template="plotly_white"
+    )
+
+    fig.show()
+
