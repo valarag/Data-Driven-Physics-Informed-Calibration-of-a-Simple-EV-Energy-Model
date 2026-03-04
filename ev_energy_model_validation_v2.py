@@ -7,7 +7,7 @@ import plotly.io as pio
 
 pio.renderers.default = "browser" 
 
-matplotlib_mode = True # sets wether matplotlib or plotly express (in browser window) are used
+matplotlib_mode = False # sets wether matplotlib or plotly express (in browser window) are used
 
 TRACKING_FILE = "Tracking_data_efficiecny.csv"
 CURVE_PT_FILE = Path("curves") / "eta_powertrain_vs_speed.csv"
@@ -47,28 +47,34 @@ v = df["v_mps"].to_numpy()
 a = df["Acceleration"].to_numpy()
 theta = df["Slope Angle (rad)"].to_numpy()
 
+# tracking dataset has no battery temperature -> assume 10C for now
+T_assumed = 10.0
+
+# typical AC systems use up to 5-6kw for a midsize car
+is_ac_on = 0
+ac_power_draw = 5500
+
 # ---------- mech power from dataset resistive force ----------
 # NOTE: Resistive force can be negative depending on sign conventions.
 # For consumption validation we keep positive traction demand only.
 F_res = df["Total Resistive Force"].to_numpy()
-P_mech_data_W = np.maximum(F_res * v, 0.0)
+P_mech_data_W = np.maximum(F_res * v*1.8+(ac_power_draw*is_ac_on), 0.0)
 df["P_mech_data_kW"] = P_mech_data_W / 1000.0
 
 # ---------- mech power from assumed parameters (for comparison) ----------
 F_aero = 0.5 * RHO * CD * A * v**2
 F_rr   = CRR * MASS * G * np.cos(theta)
-F_gr   = MASS * G * np.sin(theta)
+F_gr   = MASS * G * np.sin(theta) *1.8
 F_in   = MASS * a
 
-P_mech_param_W = np.maximum((F_aero + F_rr + F_gr + F_in) * v, 0.0)
+P_mech_param_W = np.maximum((F_aero + F_rr + F_gr + F_in) * v*1.1, 0.0)
 df["P_mech_param_kW"] = P_mech_param_W / 1000.0
 
 # ---------- apply efficiencies ----------
 eta_pt = interp_1d(df["Speed"].to_numpy(), pt["speed_kph"], pt["eta_powertrain_mean"])
 eta_pt = np.clip(eta_pt, 0.70, 0.98)
 
-# tracking dataset has no battery temperature -> assume 25C for now
-T_assumed = 25.0
+
 eta_bat = interp_1d(np.full(len(df), T_assumed), bat["T_bat_C"], bat["eta_battery_mean"])
 eta_bat = np.clip(eta_bat, 0.70, 0.995)
 

@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import plotly.io as pio
 pio.renderers.default = "browser"
 
-matplotlib_mode = True
+matplotlib_mode = False
 
 # =========================
 # CONFIG
