@@ -1,43 +1,158 @@
-# Lithium-Ion Battery Drive Cycle Dataset
-This dataset was developed by Jiaqi Yao at Technische Universität Berlin (jiaqi.yao97@gmail.com / jiaqi.yao@tu-berlin.de). Please offer appropriate citations if you would like to use the data.
+# Data-Driven Digital Twin — EV Energy Consumption Prediction
+**Phase 1: Static Calibration & Model Freezing**
+Final Year Project · Electrical / Mechanical / Computer Science
 
-## General Info
-Three brand-new LG INR 21700 M50LT lithium-ion battery cells with 4.93Ah nominal capacity under the same aging state were cycled with 12 drive cycles (4 cycles each cell) under 5 ambient temperatures (45°C, 35°C, 25°C, 15°C, 5°C). The 12 cycles are: Braunschweig City Driving Cycle (BCDC), California Unified Cycle (LA92), Heavy Heavy-Duty Diesel Truck Composite Cycle (HHDDT), City Suburban Heavy Vehicle Cycle (CSHVC), Federal Test Procedure-72 (FTP-72), Federal Test Procedure-75 (FTP-75), Highway Fuel Economy Test (HWFET), Inspection and Maintenance (IM), US06 Supplemental Federal Test Procedure (US06), Parcel Delivery Truck Cycle Baltimore (PDTCB), Port Drayage Metro Highway Cycle California (PDMHC), Orange County Transit Bus Cycle (OCTBC).
+---
 
-The exact assignment of the drive cycles is listed in the following table. Note that the order of the cycles in the table for each cell corresponds to the order in the test plan.
+## Project Overview
 
-| Cell Name | Drive Cycles                         |
-| --------- | ------------------------------------ |
-| NMC063    | 1_BCDC, 2_LA92, 3_HHDDT, 8_IM        |
-| NMC068    | 4_CSHVC, 5_FTP-72, 6_FTP-75, 7_HWFET |
-| NMC069    | 9_US06, 10_PDTCB, 11_PDMHC, 12_OCTBC |
+This project builds a **hybrid physics + machine learning digital twin** that predicts electric vehicle energy consumption from trip parameters (speed, grade, distance, regeneration). The model is designed for **pre-trip journey planning** — a driver inputs their route conditions and receives an accurate energy estimate with a 90% confidence interval.
 
-## Test Plan
-Before each test started, the ambient temperature was set using the Memmert climate chamber. The test was started after the reading of the temperature sensor is stable. The test plan of each cell at each temperature is as follows:
-1. Relaxation for 1min (1Hz)
-2. CC charging with 1C until the cell voltage reaches 4.2V (10Hz)
-3. CV charging with 4.2V until the current drops under 0.02C (10Hz)
-4. Relaxation for 2h (1Hz)
-5. Repeated cycling with one drive cycle until the cell voltage reaches 2.5V (10Hz)
-6. Repeat step 2-5 until the assigned four drive cycles are completed
-Note that the regeneration at the beginning of each dynamic cycle (Above 90% SOC pre-calculated using the power profile and nominal voltage) is trimmed to prevent overcharge. Regeneration power for the low-temperature case (5°C) is multiplied with a factor of 0.7 to simulate reality.
+The vehicle modelled is a **Tesla Model 3 Long Range AWD** (mass 1847 kg, Cd 0.23, frontal area 2.22 m²).
 
-## Files
-There are in total three independent folders given:
+**Key result:** Hybrid model MAPE of **4.77%** on completely unseen validation trips, against a physics-only baseline of ~127% (untuned) / ~12% (tuned).
 
-| Folder Name    | Description                                                                                                                                                                                         |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0_raw          | Raw test data (including capacity test at 25°C and complete test procedures of all cells)                                                                                                           |
-| 1_split        | Drive cycle data extracted from raw test data and split into individual profiles with reference SOC calculated using coulomb counting, each starting from 100% SOC to end-of-discharge voltage 2.5V |
-| 2_preprocessed | Drive cycle data from 1_split resampled into strict 10Hz  (plug and play!)                                                                                                                          |
-The naming convention is very intuitive. For example, in root folder "2_preprocessed" you can find a folder named "JY_SOC_5deg", which means this folder contains data under 5°C. And in this folder, you can further find 12 .csv files with the 12 preprocessed drive cycle profiles under 5°C. The names of the drive cycles are explicitly stated in the file name.
+---
 
-## Data
-In the raw test data from folder "0_raw", the files were directly exported from the BaSyTec CTS cycler. The data contains standard test records with units explicitly stated. In case of any confusion, you can refer to the documentation.
-In the data from folder "1_split" and "2_preprocessed", the following columns are used:
-Time: time elapsed from the beginning of the drive cycle in second
-Voltage: measured terminal voltage of the cell in volt
-Current: measured current in ampere
-Temperature: measured cell surface temperature in degree Celsius
-Power: measured power in watt, not included in preprocessed data
-SOC: reference state of charge of the cell calculated using coulomb counting
+## Repository Structure
+
+```
+├── curves/                          # Efficiency lookup tables (generated)
+│   ├── eta_powertrain_vs_speed.csv
+│   ├── eta_battery_vs_Tbat.csv
+│   └── tuned_physics_params.json
+│
+├── data/                            # ML datasets (generated)
+│   ├── trip_features.csv
+│   └── validation_report.csv
+│
+├── models/                          # Trained model (generated)
+│   └── hybrid_model.pkl
+│
+├── figs/                            # All output plots (generated)
+│
+├── 2_preprocessed/                  # Preprocessed intermediate data
+│
+├── Tracking_data_efficiecny.csv     # Primary trip — calibration (59,258 rows, 744 km)
+├── trip_11apr2022.csv               # Validation trip 1 (1,818 rows, 28.5 km)
+├── trip_12apr2022.csv               # Validation trip 2 (4,008 rows, 59.4 km)
+│
+├── build_eta_powertrain.py          # STEP 1a — build powertrain efficiency curve
+├── build_eta_battery.py             # STEP 1b — build battery efficiency curve
+├── calibrate_physics_model.py       # STEP 2  — tune Cd, Crr via L-BFGS-B
+├── build_trip_dataset.py            # STEP 3  — segment trips, compute ML features
+├── hybrid_model.py                  # STEP 4  — train GBR correction layer
+├── ev_energy_model_validation_v3.py # STEP 5a — standalone physics model inspection
+├── validate_hybrid_model.py         # STEP 5b — final cross-trip validation
+└── README.md
+```
+
+---
+
+## Run Order
+
+> **Important:** scripts must be run in this exact order. Each step produces files that the next step depends on.
+
+### Step 1 — Build efficiency curves
+```bash
+python build_eta_powertrain.py
+python build_eta_battery.py
+```
+**Produces:** `curves/eta_powertrain_vs_speed.csv`, `curves/eta_battery_vs_Tbat.csv`
+
+These are one-time lookup tables mapping vehicle speed → powertrain efficiency and battery temperature → battery efficiency. All downstream scripts interpolate from these curves.
+
+---
+
+### Step 2 — Calibrate physics model
+```bash
+python calibrate_physics_model.py
+```
+**Reads:** `Tracking_data_efficiecny.csv`, efficiency curves from Step 1
+**Produces:** `curves/tuned_physics_params.json`
+
+Uses L-BFGS-B optimisation to find the best values of the drag coefficient (Cd), rolling resistance (Crr), and speed-dependent drag correction (k_cd) by minimising RMSE between the parametric model and the data-driven mechanical power signal. Also validates the tuned model against all three trip files and saves a convergence plot.
+
+---
+
+### Step 3 — Build ML training dataset
+```bash
+python build_trip_dataset.py
+```
+**Reads:** `Tracking_data_efficiecny.csv`, `curves/tuned_physics_params.json`
+**Produces:** `data/trip_features.csv`, four EDA plots in `figs/`
+
+Segments the 59,258-row primary recording into **66 sub-trips** by detecting standstills longer than 30 seconds. Computes one feature row per sub-trip (average speed, distance, elevation gain, slope, regeneration fraction) and adds the physics model residual as the ML target column.
+
+---
+
+### Step 4 — Train hybrid model
+```bash
+python hybrid_model.py
+```
+**Reads:** `data/trip_features.csv`
+**Produces:** `models/hybrid_model.pkl`, four model plots in `figs/`
+
+Fits a Gradient Boosting Regressor to the **specific residual** (residual per km) using a 70/30 stratified train/test split and 5-fold GridSearchCV. Also fits 5th/95th percentile quantile models to produce 90% confidence intervals. Serialises the full model bundle (mean + quantile models, feature list, metrics) to a pickle file.
+
+---
+
+### Step 5a — Physics model inspection (optional)
+```bash
+python ev_energy_model_validation_v3.py
+```
+**Reads:** `Tracking_data_efficiecny.csv`, efficiency curves
+**Produces:** diagnostic plots in `figs/`
+
+Standalone script to inspect the physics model in isolation — cumulative energy comparison, instantaneous power plots, and a multi-axis diagnostic panel. Useful for verifying the physics layer before running the full hybrid pipeline.
+
+---
+
+### Step 5b — Final validation
+```bash
+python validate_hybrid_model.py
+```
+**Reads:** `models/hybrid_model.pkl`, `trip_11apr2022.csv`, `trip_12apr2022.csv`
+**Produces:** `data/validation_report.csv`, four validation plots in `figs/`
+
+Tests the frozen hybrid model on two completely unseen trips. Reports MAPE, RMSE, and R² broken down by speed tier (urban / mixed / highway), grade tier (flat / hilly), and trip length (short / medium / long). Prints a Phase 1 pass/fail checklist against the white paper success criteria.
+
+---
+
+## Results Summary
+
+| Metric | Physics only | Hybrid model |
+|---|---|---|
+| Cross-trip MAPE | ~127% (untuned) / ~12% (tuned) | **4.77%** |
+| Test set MAPE | 70.21% | 7.36% |
+| Test set R² | 0.19 | **0.99** |
+| 90% CI coverage | — | **90.9%** |
+
+> Physics MAPE drops to ~12% once Step 2 has generated `tuned_physics_params.json`. The hybrid model achieves <7% regardless, but accuracy is best when the full pipeline is run in order.
+
+---
+
+## Dependencies
+
+```bash
+pip install pandas numpy scipy scikit-learn matplotlib seaborn
+```
+
+Python 3.9 or higher recommended. No GPU required.
+
+---
+
+## Data Sources
+
+- **Primary calibration trip:** `Tracking_data_efficiecny.csv` — real OBD-II recording, Cape Town, 5 April 2022, 744 km, 294.7 kWh
+- **Validation trip 1:** `trip_11apr2022.csv` — 11 April 2022, 28.5 km, 11.5 kWh
+- **Validation trip 2:** `trip_12apr2022.csv` — 12 April 2022, 59.4 km, 23.7 kWh
+
+All trips recorded from a Tesla Model 3 LR AWD via GPS + OBD-II at 1-second intervals.
+
+---
+
+## Reference
+
+Based on the project white paper:
+> Banik, S. (2025). *Data-Driven Digital Twin for EV Energy Consumption Prediction: A Comprehensive Implementation Guide for Engineering Students.* November 2025.
