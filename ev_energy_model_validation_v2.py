@@ -18,10 +18,10 @@ OUTDIR.mkdir(exist_ok=True)
 
 # Tesla Model 3 (Long Range AWD) - paramètres physiques
 RHO = 1.225        # kg/m3
-CD = 0.23          # coefficient de traînée (faible pour Model 3)
+CD = 0.36         # coefficient de traînée (faible pour Model 3)
 A = 2.22           # m2 surface frontale approx
 CRR = 0.009        # résistance au roulement pneus route
-MASS = 1847        # kg (ordre de grandeur Model 3 LR avec conducteur)
+MASS = 1900       # kg (ordre de grandeur Model 3 LR avec conducteur)
 G = 9.81
 
 # ---------- helpers ----------
@@ -63,11 +63,11 @@ df["P_mech_data_kW"] = P_mech_data_W / 1000.0
 
 # ---------- mech power from assumed parameters (for comparison) ----------
 F_aero = 0.5 * RHO * CD * A * v**2
-F_rr   = CRR * MASS * G * np.cos(theta)
-F_gr   = MASS * G * np.sin(theta) *1.8
-F_in   = MASS * a
+F_rr   = CRR * MASS * G * np.cos(theta) *2.5
+F_gr   = MASS * G * np.sin(theta)
+F_in   = MASS * a*1.2
 
-P_mech_param_W = np.maximum((F_aero + F_rr + F_gr + F_in) * v*1.1, 0.0)
+P_mech_param_W = (F_aero + F_rr + F_gr + F_in) * v*2.3
 df["P_mech_param_kW"] = P_mech_param_W / 1000.0
 
 # ---------- apply efficiencies ----------
@@ -122,6 +122,7 @@ if matplotlib_mode:
     plt.figure()
     plt.plot(df["P_mech_data_kW"].to_numpy()[::step], label="P_mech from dataset force (kW)")
     plt.plot(df["P_mech_param_kW"].to_numpy()[::step], label="P_mech from param model (kW)")
+    plt.plot(df["Energy Consumption (kWh)"].to_numpy()[::step], label ="P_measured")
     plt.title("Mechanical power: dataset vs param model (downsampled)")
     plt.xlabel("Sample index (downsampled)")
     plt.ylabel("Power (kW)")
@@ -175,7 +176,7 @@ else:
 
     fig2.add_trace(
         go.Scatter(
-            y=df["P_mech_data_kW"].to_numpy()[::step],
+            y=df["P_mech_data_kW"].to_numpy()[::],
             mode="lines",
             name="P_mech from dataset force (kW)"
         )
@@ -183,9 +184,16 @@ else:
 
     fig2.add_trace(
         go.Scatter(
-            y=df["P_mech_param_kW"].to_numpy()[::step],
+            y=df["P_mech_param_kW"].to_numpy()[::],
             mode="lines",
             name="P_mech from param model (kW)"
+        )
+    )
+    fig2.add_trace(
+        go.Scatter(
+            y=df["Energy Consumption (kWh)"].to_numpy()[::]/df["dt_s"].to_numpy() * 3600.0,
+            mode="lines",
+            name="P_meas (kW)"
         )
     )
 
