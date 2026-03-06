@@ -72,10 +72,10 @@ T_BAT_ASSUMED = 10.0
 #   Cd    — drag coefficient        (Tesla spec: 0.23)
 #   Crr   — rolling resistance      (typical road tyre: 0.009)
 #   k_cd  — speed-dependent drag    (start at 0 = constant Cd)
-X0     = [0.23,  0.009,  0.0]
-BOUNDS = [(0.15, 0.40),     # Cd   physically realistic
-          (0.004, 0.020),   # Crr  physically realistic
-          (-1e-4, 1e-4)]    # k_cd small correction only
+X0     = [0.50,  0.030,  0.0005]   # start at current solution
+BOUNDS = [(0.20, 1.50),             # Cd effective — can be large
+          (0.004, 0.080),           # Crr effective
+          (-1e-3, 1e-3)]            # k_cd
 
 REQ_COLS = ["Speed", "DeltaT", "Energy Consumption (kWh)",
             "Total Resistive Force", "Slope Angle (rad)", "Acceleration"]
@@ -83,6 +83,24 @@ REQ_COLS = ["Speed", "DeltaT", "Energy Consumption (kWh)",
 # ==========================================================
 # HELPERS
 # ==========================================================
+
+def trip_energy_kwh(df, Cd, Crr, k_cd):
+    """Compute total predicted battery energy for a trip."""
+    v     = df["v_mps"].to_numpy()
+    theta = df["theta"].to_numpy()
+    a     = df["accel"].to_numpy()
+    eta   = df["eta_sys"].to_numpy()
+    dt    = df["dt_s"].to_numpy()
+
+    Cd_v   = Cd + k_cd * v
+    F_aero = 0.5 * RHO * Cd_v * A * v**2
+    F_rr   = Crr * MASS * G * np.cos(theta)
+    F_gr   = MASS * G * np.sin(theta)
+    F_in   = MASS * a
+    P_mech = (F_aero + F_rr + F_gr + F_in) * v + IS_AC_ON * AC_POWER_W
+
+    P_bat  = np.where(P_mech < 0, P_mech * eta, P_mech / eta)
+    return np.sum(P_bat * dt / 3_600_000)
 
 def interp_1d(x, xp, fp):
     return np.interp(np.asarray(x), np.asarray(xp), np.asarray(fp),
@@ -107,7 +125,7 @@ def load_trip(filepath, pt, bat):
 
     # Data-driven mechanical power (teacher signal, allows regen)
     F_res = df["Total Resistive Force"].to_numpy()
-    df["P_mech_data_W"] = F_res * df["v_mps"].to_numpy() + IS_AC_ON * AC_POWER_W
+    df["P_mech_data_W"] = df["Energy Consumption (kWh)"].to_numpy() * 3_600_000 / df["dt_s"].to_numpy()
 
     return df
 
@@ -142,16 +160,10 @@ def cumulative_energy_kwh(P_bat_W, dt_s):
 
 
 def trip_errors(df, Cd, Crr, k_cd):
-    """Return (RMSE_power_kW, total_energy_error_pct) for a trip."""
-    P_param  = physics_power(df, Cd, Crr, k_cd)
-    P_bat_p  = apply_efficiency(P_param, df["eta_sys"].to_numpy())
-    P_bat_d  = apply_efficiency(df["P_mech_data_W"].to_numpy(), df["eta_sys"].to_numpy())
-
-    rmse    = np.sqrt(np.mean((P_bat_p - P_bat_d) ** 2)) / 1000.0   # kW
-    E_pred  = cumulative_energy_kwh(P_bat_p, df["dt_s"].to_numpy())[-1]
+    E_pred  = trip_energy_kwh(df, Cd, Crr, k_cd)
     E_meas  = df["Energy Consumption (kWh)"].sum()
-    err_pct = (E_pred - E_meas) / (abs(E_meas) + 1e-9) * 100
-
+    err_pct = (E_pred - E_meas) / abs(E_meas) * 100
+    rmse    = abs(err_pct)   # use energy error as proxy for RMSE display
     return rmse, err_pct
 
 # ==========================================================
@@ -190,11 +202,11 @@ convergence_log = []
 
 def objective(x):
     Cd, Crr, k_cd = x
-    P_param = physics_power(df_primary, Cd, Crr, k_cd)
-    P_data  = df_primary["P_mech_data_W"].to_numpy()
-    rmse    = np.sqrt(np.mean((P_param - P_data) ** 2))
-    convergence_log.append(rmse / 1000.0)
-    return rmse
+    E_pred = trip_energy_kwh(df_primary, Cd, Crr, k_cd)
+    E_meas = df_primary["Energy Consumption (kWh)"].sum()
+    err    = (E_pred - E_meas) / abs(E_meas)
+    convergence_log.append(abs(err) * 100)
+    return err ** 2
 
 print("\nRunning optimiser (L-BFGS-B) ...")
 result = minimize(

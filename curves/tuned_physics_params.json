@@ -1,0 +1,10 @@
+{
+  "Cd0": 0.5050423606059741,
+  "Crr": 0.03457731567016325,
+  "k_cd": 0.0005458145568446404,
+  "RHO": 1.225,
+  "A": 2.22,
+  "MASS": 1847,
+  "G": 9.81,
+  "note": "Calibrated by calibrate_physics_model.py via L-BFGS-B"
+}
