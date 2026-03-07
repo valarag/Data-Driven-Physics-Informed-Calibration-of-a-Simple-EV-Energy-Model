@@ -33,7 +33,7 @@ The vehicle modelled is a **Tesla Model 3 Long Range AWD** (mass 1847 kg, Cd 0.2
 │
 ├── 2_preprocessed/                  # Preprocessed intermediate data
 │
-├── Tracking_data_efficiecny.csv     # Primary trip — calibration (59,258 rows, 744 km)   ajouter graph
+├── Tracking_data_efficiecny.csv     # Primary trip — calibration (59,258 rows, 744 km)  EDA ajouter graph
 ├── trip_11apr2022.csv               # Validation trip 1 (1,818 rows, 28.5 km)            ajouter graph
 ├── trip_12apr2022.csv               # Validation trip 2 (4,008 rows, 59.4 km)
 │
